@@ -287,6 +287,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
     <span class="badge-text" id="badge-u"></span>
     <button class="btn btn-ghost btn-sm" onclick="syncGoogle()" style="background:#0ea57a;color:#fff">🔄 새로고침</button>
     <button class="btn btn-ghost btn-sm" onclick="openGradeIntervalPanel()" style="border-color:rgba(255,160,80,0.5);color:#ffb060">⚖ 급간점수</button>
+    <button class="btn btn-ghost btn-sm" onclick="openPdfImportModal()" style="border-color:rgba(99,179,237,0.5);color:#63b3ed">📄 PDF 배점표</button>
     <span class="sync-pill" id="syncPill" style="display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(34,211,165,0.15);color:#0ea57a;border:1px solid rgba(34,211,165,0.4)">
       <span class="sdot" id="sdot" style="width:6px;height:6px;border-radius:50%;background:#0ea57a;flex-shrink:0"></span>
       <span id="stxt">대기중</span>
@@ -568,6 +569,35 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
   </div>
 </div>
 
+
+<!-- PDF 실기배점표 파싱 모달 -->
+<div class="modal-bg" id="pdfImportModal">
+  <div class="modal" style="width:660px;max-height:90vh;overflow-y:auto">
+    <button class="modal-close" onclick="closeModal('pdfImportModal')">✕</button>
+    <div class="modal-title">📄 PDF 실기배점표 자동 입력</div>
+    <div style="font-size:12px;color:#9aa3bc;margin-bottom:16px">대학별 실기 배점표 PDF를 올리면 Claude AI가 자동으로 분석해서 배점 데이터를 추출합니다</div>
+    
+    <div id="pdfDropZone" style="border:2px dashed rgba(99,179,237,0.4);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s;margin-bottom:16px;background:rgba(99,179,237,0.05)"
+         onclick="document.getElementById('pdfFileInput').click()"
+         ondragover="event.preventDefault();this.style.borderColor='#63b3ed'"
+         ondragleave="this.style.borderColor='rgba(99,179,237,0.4)'"
+         ondrop="handlePdfDrop(event)">
+      <div style="font-size:36px;margin-bottom:8px">📄</div>
+      <div style="color:#63b3ed;font-weight:600;margin-bottom:4px">PDF 파일을 끌어다 놓거나 클릭해서 선택</div>
+      <div style="font-size:11px;color:#9aa3bc">여러 대학이 포함된 PDF도 가능합니다</div>
+    </div>
+    <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="handlePdfFile(this.files[0])">
+    
+    <div id="pdfStatus" style="display:none;margin-bottom:14px"></div>
+    <div id="pdfResult" style="display:none"></div>
+    
+    <div class="modal-footer" style="margin-top:12px">
+      <button class="btn" style="background:#f1f5f9;color:var(--text2);border:1px solid var(--border)" onclick="closeModal('pdfImportModal')">닫기</button>
+      <button class="btn btn-primary" id="pdfApplyBtn" style="display:none" onclick="applyPdfResult()">✅ 배점 데이터 적용</button>
+    </div>
+  </div>
+</div>
+
 <!-- 급간점수 패널 -->
 <div class="modal-bg" id="gradeIntervalModal">
   <div class="modal" style="width:680px;max-height:85vh">
@@ -616,7 +646,7 @@ let ST = { gun:'all', pass:'all', gyojik:false, delTarget:null, curKey:null, sid
 // ─ Storage ─
 function loadC(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||'[]'); }catch{ return []; } }
 function saveC(l){ localStorage.setItem(LS_KEY, JSON.stringify(l)); }
-function allS(){ return [...BASE_STUDENTS, ...loadC()]; }
+function allS(){ return GS_STUDENTS.length > 0 ? GS_STUDENTS : [...BASE_STUDENTS, ...loadC()]; }
 function sKey(s){ return s.name+'_'+s.gender+'_'+(s.school||'')+'_'+(s.grade||''); }
 
 // ─ Init ─
@@ -1417,7 +1447,7 @@ function parseSilgiSheet(rows){
 }
 
 // ─── 기존 학생 드롭다운 재구축 ───
-function allStudents(){return[...GS_STUDENTS,...BASE_S,...loadManual()];}
+function allStudents(){const base=GS_STUDENTS.length>0?GS_STUDENTS:BASE_S;return[...base,...loadManual()];}
 function sKey(s){return(s._src||'b')+'_'+s.name+'_'+(s.gender||'')+'_'+(s.school||'');}
 function uKey(u){return u.university+'||'+u.department;}
 
@@ -2924,6 +2954,164 @@ function clearAllGradeIntervals(){
   renderTable();
   toast('급간점수 초기화됨');
 }
+
+// ─── PDF 실기배점표 자동 파싱 ───
+let _parsedPdfTables = null;
+
+function openPdfImportModal(){
+  _parsedPdfTables = null;
+  document.getElementById('pdfStatus').style.display='none';
+  document.getElementById('pdfResult').style.display='none';
+  document.getElementById('pdfApplyBtn').style.display='none';
+  document.getElementById('pdfFileInput').value='';
+  openM('pdfImportModal');
+}
+
+function handlePdfDrop(e){
+  e.preventDefault();
+  document.getElementById('pdfDropZone').style.borderColor='rgba(99,179,237,0.4)';
+  const file=e.dataTransfer.files[0];
+  if(file&&file.type==='application/pdf') handlePdfFile(file);
+  else toast('❌ PDF 파일만 지원합니다','er');
+}
+
+async function handlePdfFile(file){
+  if(!file) return;
+  const status=document.getElementById('pdfStatus');
+  const result=document.getElementById('pdfResult');
+  const applyBtn=document.getElementById('pdfApplyBtn');
+  
+  status.style.display='block';
+  status.innerHTML='<div style="padding:12px 16px;background:rgba(99,179,237,0.1);border-radius:8px;border:1px solid rgba(99,179,237,0.3);color:#63b3ed;font-size:13px">⏳ <b>'+file.name+'</b> 분석 중... (30초 내외 소요)</div>';
+  result.style.display='none';
+  applyBtn.style.display='none';
+  _parsedPdfTables = null;
+
+  try {
+    // PDF를 base64로 변환
+    const base64 = await new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload = () => res(reader.result.split(',')[1]);
+      reader.onerror = () => rej(new Error('파일 읽기 실패'));
+      reader.readAsDataURL(file);
+    });
+
+    const prompt = `이 PDF는 체육대학 정시 실기 배점표입니다.
+각 대학/학과별 실기 배점표를 추출해주세요.
+
+반드시 아래 JSON 형식으로만 응답하세요. 마크다운이나 설명 없이 JSON만:
+{
+  "tables": [
+    {
+      "university": "대학명",
+      "department": "학과명 (없으면 빈 문자열)",
+      "headers": ["배점", "종목명1", "종목명2", ...],
+      "rows": [
+        ["100", "기록값1", "기록값2", ...],
+        ["90", "기록값1", "기록값2", ...],
+        ...
+      ]
+    }
+  ]
+}
+
+주의사항:
+- headers 첫 번째 값은 반드시 "배점"
+- rows 첫 번째 값은 점수(숫자)
+- 점수 낮은 것부터 혹은 높은 것부터 순서대로
+- 대학명과 학과명은 PDF에 있는 그대로
+- 표가 여러 개면 모두 포함`;
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-opus-4-5-20251101',
+        max_tokens: 4000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+            { type: 'text', text: prompt }
+          ]
+        }]
+      })
+    });
+
+    if(!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error?.message || 'API 오류 '+resp.status);
+    }
+
+    const data = await resp.json();
+    const text = data.content.map(c=>c.text||'').join('').trim();
+    
+    // JSON 파싱
+    let jsonStr = text;
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if(jsonMatch) jsonStr = jsonMatch[0];
+    
+    const parsed = JSON.parse(jsonStr);
+    if(!parsed.tables || !Array.isArray(parsed.tables)) throw new Error('배점 데이터를 찾지 못했습니다');
+    
+    _parsedPdfTables = parsed.tables;
+    
+    // 결과 미리보기 표시
+    let html = '<div style="font-weight:700;margin-bottom:10px;color:#22d3a5">✅ '+parsed.tables.length+'개 대학 배점표 추출 완료</div>';
+    html += '<div style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:10px">';
+    
+    for(const tbl of parsed.tables){
+      const name = tbl.university + (tbl.department ? ' ' + tbl.department : '');
+      html += '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">';
+      html += '<div style="background:var(--header);padding:8px 12px;font-weight:700;font-size:12px;color:#c8d8ff">'+name+'</div>';
+      html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">';
+      html += '<thead><tr>'+tbl.headers.map(h=>'<th style="padding:5px 8px;background:rgba(255,255,255,0.05);text-align:center">'+h+'</th>').join('')+'</tr></thead>';
+      html += '<tbody>';
+      const previewRows = tbl.rows.slice(0,5);
+      for(const row of previewRows){
+        html += '<tr>'+row.map((c,i)=>'<td style="padding:4px 8px;text-align:center;border-top:1px solid var(--border)">'+(c||'—')+'</td>').join('')+'</tr>';
+      }
+      if(tbl.rows.length > 5) html += '<tr><td colspan="'+tbl.headers.length+'" style="padding:4px 8px;text-align:center;color:#9aa3bc;font-size:10px">... '+tbl.rows.length+'행 총</td></tr>';
+      html += '</tbody></table></div></div>';
+    }
+    html += '</div>';
+    
+    status.innerHTML='<div style="padding:10px 14px;background:rgba(34,211,165,0.1);border-radius:8px;border:1px solid rgba(34,211,165,0.3);color:#22d3a5;font-size:12px">✅ <b>'+file.name+'</b> 분석 완료 — 아래 미리보기를 확인 후 [배점 데이터 적용] 버튼을 누르세요</div>';
+    result.style.display='block';
+    result.innerHTML=html;
+    applyBtn.style.display='block';
+    
+  } catch(e) {
+    status.innerHTML='<div style="padding:10px 14px;background:rgba(220,38,38,0.1);border-radius:8px;border:1px solid rgba(220,38,38,0.3);color:#dc2626;font-size:12px">❌ 오류: '+e.message+'</div>';
+    console.error(e);
+  }
+}
+
+function applyPdfResult(){
+  if(!_parsedPdfTables) return;
+  let applied = 0;
+  for(const tbl of _parsedPdfTables){
+    const key = tbl.university + (tbl.department ? '_' + tbl.department : '');
+    const rows = [tbl.headers, ...tbl.rows];
+    SG_TABLES[tbl.university] = { name: tbl.university, rows };
+    if(tbl.department) SG_TABLES[tbl.department] = { name: tbl.department, rows };
+    // UNIS_DATA에서 매칭해서 더 정확하게
+    const matched = UNIS_DATA.filter(u => 
+      u.university.includes(tbl.university) || tbl.university.includes(u.university)
+    );
+    for(const u of matched){
+      SG_TABLES[u.university] = { name: u.university, rows };
+      if(tbl.department && (u.department.includes(tbl.department) || tbl.department.includes(u.department))){
+        SG_TABLES[u.department] = { name: u.department, rows };
+      }
+    }
+    applied++;
+  }
+  toast('✅ '+applied+'개 대학 배점표 적용 완료','ok');
+  closeModal('pdfImportModal');
+  doRenderTable();
+}
+
 </script>
 
 </body>
