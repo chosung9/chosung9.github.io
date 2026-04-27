@@ -1394,8 +1394,8 @@ function evalFormulaWithScore(u, ex, formula, engScoresArr){
   const eg=ex.english_grade||3, hg=ex.hs_grade||6;
   const engScore=engScoresArr&&engScoresArr[eg-1]!=null?engScoresArr[eg-1]:(u.eng_scores&&u.eng_scores[eg-1]!=null?u.eng_scores[eg-1]:0);
   const hsScore=u.hs_scores&&u.hs_scores[hg-1]!=null?u.hs_scores[hg-1]:0;
-  const탐1표=ex.explore1_std||0, 탐1백=ex.explore1_pct||0;
-  const탐2표=ex.explore2_std||0, 탐2백=ex.explore2_pct||0;
+  const 탐1표=ex.explore1_std||0, 탐1백=ex.explore1_pct||0;
+  const 탐2표=ex.explore2_std||0, 탐2백=ex.explore2_pct||0;
   const vars={'국표':ex.korean_std||0,'국백':ex.korean_pct||0,'수표':ex.math_std||0,'수백':ex.math_pct||0,'영어':engScore,'영등':engScore,'탐1표':탐1표,'탐1백':탐1백,'탐2표':탐2표,'탐2백':탐2백,'탐평표':(탐1표+탐2표)/2,'탐평백':(탐1백+탐2백)/2,'한국사':hsScore,'한점':hsScore};
   let expr=formula;
   const varKeys=Object.keys(vars).sort((a,b)=>b.length-a.length);
@@ -1568,8 +1568,8 @@ function evalFormula(){
     const hg=ex.hs_grade||6;
     const engScore=engScores[eg-1]!=null?engScores[eg-1]:(u&&u.eng_scores&&u.eng_scores[eg-1]!=null?u.eng_scores[eg-1]:0);
     const hsScore=u&&u.hs_scores&&u.hs_scores[hg-1]!=null?u.hs_scores[hg-1]:0;
-    const탐1표=ex.explore1_std||0, 탐1백=ex.explore1_pct||0;
-    const탐2표=ex.explore2_std||0, 탐2백=ex.explore2_pct||0;
+    const 탐1표=ex.explore1_std||0, 탐1백=ex.explore1_pct||0;
+    const 탐2표=ex.explore2_std||0, 탐2백=ex.explore2_pct||0;
 
     const vars={
       '국표':ex.korean_std||0, '국백':ex.korean_pct||0,
