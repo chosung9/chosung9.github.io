@@ -806,6 +806,7 @@ function renderTable(){
       <td style="color:var(--text2)">${u.suneung_ratio!=null?Math.round(u.suneung_ratio*100)+'%':''}</td>
       <td style="color:var(--text2)">${u.silgi_ratio!=null?Math.round(u.silgi_ratio*100)+'%':''}</td>
       <td style="color:var(--accent);font-size:11px">${u.indicator||''}</td>
+      <td style="font-size:11px;color:var(--text2)">${(()=>{const kr=parseFloat(u.korean_ratio)||0,ma=parseFloat(u.math_ratio)||0,ex=parseFloat(u.explore_ratio)||0;const parts=[];if(kr>0)parts.push('국'+Math.round(kr*100)+'%');if(ma>0)parts.push('수'+Math.round(ma*100)+'%');return parts.join(' ');})()}</td>
       <td style="font-size:11px;color:var(--text2);text-align:left">${silgi||'—'}</td>
     `;
     tbody.appendChild(tr);
@@ -1956,7 +1957,7 @@ function renderResults(){
   const sel=document.getElementById('studentSel');
   const curKey=sel?sel.value:'';
   if(!hasScore&&!curKey){
-    tbody.innerHTML='<tr><td colspan="19" style="text-align:center;padding:60px;color:#9aa3bc">학생을 선택하거나 성적을 입력하면 결과가 표시됩니다</td></tr>';
+    tbody.innerHTML='<tr><td colspan="21" style="text-align:center;padding:60px;color:#9aa3bc">학생을 선택하거나 성적을 입력하면 결과가 표시됩니다</td></tr>';
     return;
   }
   const gunF=window._ST_gun||'all',passF=window._ST_pass||'all',gyoF=window._ST_gyo||false;
@@ -2000,7 +2001,7 @@ function renderResults(){
   if(tcnt)tcnt.textContent=filtered.length+'개 표시';
 
   tbody.innerHTML='';
-  if(!filtered.length){tbody.innerHTML='<tr><td colspan="19" style="text-align:center;padding:60px;color:#9aa3bc">조건에 맞는 대학이 없습니다</td></tr>';return;}
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="21" style="text-align:center;padding:60px;color:#9aa3bc">조건에 맞는 대학이 없습니다</td></tr>';return;}
 
   filtered.forEach((r,i)=>{
     const u=r.u;
@@ -2027,22 +2028,33 @@ function renderResults(){
       <td><span class="type-badge ${tc}">${u.type||''}</span></td>
       <td>${u.capacity!=null?u.capacity:''}</td>
       <td>${gy}</td>
-      <td><span class="calc-btn" onclick="openCalcModal('${uKey(u).replace(/'/g,"\'")}',event)">⚙ ${calcTxt}</span></td>
-      <td class="td-mono td-bold" style="font-size:13px;border-left:2px solid rgba(37,99,235,0.15)">${r.my.toFixed(1)}</td>
+      <td class="td-mono td-bold" style="font-size:14px">${r.my.toFixed(1)}</td>
       <td class="td-mono" style="color:#9aa3bc;font-size:11px">${u.total_score!=null?u.total_score:''}</td>
-      <td class="td-mono" style="border-left:2px solid rgba(37,99,235,0.15)">${r.cut!=null?r.cut.toFixed(1):'—'}</td>
+      <td class="td-mono">${r.cut!=null?r.cut.toFixed(1):'—'}</td>
       <td class="td-mono" style="color:#9aa3bc;font-size:11px">${u.cutline_total!=null?u.cutline_total:''}</td>
+      <td class="td-mono" style="color:var(--text2);font-size:11px">${(()=>{ const g=GRADE_INTERVALS[uKey(u)]; return (g!=null&&g>0)?g:'—'; })()}</td>
+      <td style="font-size:12px">${(()=>{
+        const g=GRADE_INTERVALS[uKey(u)];
+        const cut=u.cutline_total;
+        const myTotal=r.my;
+        if(!g||g<=0||cut==null||cut<=0) return '<span style="color:#9aa3bc">—</span>';
+        const need=(cut-myTotal)/g;
+        const color=need<=0?'#0ea57a':need<=3?'#d97706':'#dc2626';
+        const sign=need<=0?'':'+';
+        return '<span style="font-weight:700;color:'+color+'">'+sign+need.toFixed(1)+'급</span>';
+      })()}</td>
       <td><span class="status-chip ${sc}">${stL}</span></td>
       <td class="${dC}">${dT}</td>
       <td style="color:#4a5575">${u.suneung_ratio!=null?Math.round(u.suneung_ratio*100)+'%':''}</td>
       <td style="color:#4a5575">${u.silgi_ratio!=null?Math.round(u.silgi_ratio*100)+'%':''}</td>
       <td style="color:#2563eb;font-size:11px">${u.indicator||''}</td>
+      <td><span class="calc-btn" onclick="openCalcModal('${uKey(u).replace(/'/g,"\\'")}',event)">⚙ ${calcTxt}</span></td>
       <td style="font-size:11px;color:#4a5575;text-align:left">${silgi||'—'}${sgScore?` <span style="padding:1px 5px;border-radius:3px;background:#dcfce7;color:#15803d;font-size:10px;font-weight:700">실기${sgScore}</span>`:''}</td>`;
     tbody.appendChild(tr);
 
     // 상세행
     const detTr=document.createElement('tr');detTr.className='det-row';detTr.id=detId;
-    detTr.innerHTML=`<td colspan="19" class="det-cell">${buildDetail(u,r,ex)}</td>`;
+    detTr.innerHTML=`<td colspan="21" class="det-cell">${buildDetail(u,r,ex)}</td>`;
     tbody.appendChild(detTr);
   });
 }
